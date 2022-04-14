@@ -1,0 +1,137 @@
+---
+title: "R_ile_Mekansal_Analiz"
+author: "Firat Gundem"
+date: "4/14/2022"
+output: html_document
+knit: (function(input_file, encoding) {
+  out_dir <- 'docs';
+  rmarkdown::render(input_file,
+ encoding=encoding,
+ output_file=file.path(dirname(input_file), out_dir, 'index.html'))})
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+```{r results='hide', message=FALSE, warning=FALSE}
+library(sf)
+library(ggplot2)
+library(dplyr)
+library(tmap)
+```
+
+
+# Mekansal Analiz nedir? 
+
+- Mekansal analiz ya da Mekansal Veri Bilimi (**Spatial Data Science**) verilerdeki mekansallığı dikkate alarak analiz eden, yani mekanin bilgisini analizin nesnesi haline getiren yeni bir bilim alanı
+
+- Hesaplama temelli istatistik, ekonometrik ve coğrafi bilgi kümesi olarak tanımlanabilir
+
+# Mekansal analiz icin gerekli olan materyaller nelerdir?
+
+- Sekil/Polygon/Geometri/Mekan bilgisini iceren formatlar
+  + Shape File
+  + GeoJSON
+  + TopoJSON
+ 
+- Mekansal Analiz yapabilen yazilimlar
+
+    + [ArcGIS](https://www.arcgis.com/index.html) 
+    + [QGIS](https://qgis.org/tr/site/)
+    + [GeoDa](http://geodacenter.github.io/download.html)
+    + [**R**](https://www.r-project.org/)
+ 
+# Shape File ve Ozellikleri
+
+-Mekansal analiz için en temel gereksinimlerden biri shape file denilen geometri dosyasıdır. 
+- Basit anlamda shape file geometrik bilgiyi ve o geometriye ilişkin coğrafi özellikleri içerir. 
+-Bir shape file’daki geometrik bilgiler nokta, çizgi ya da poligon ile temsil edilebilirler. 
+-Uygulamada basitçe bir ülkedeki şehirlerin her birinin birer poligon olarak ifade edilebilir.
+
+```{r}
+# turkey.shp ==> Shape File
+# turkey.shx ==> Autodesk AutoCAD tarafindan derlenen, sekil ve font tanimlamalarini iceren dosya
+# turkey.dbf ==> data base file
+
+# prj, 
+#.gda, 
+#.sbx, vb.
+
+```
+
+
+# Turkiye'nin Shape File'i
+
+<https://data.humdata.org/dataset/turkey-administrative-boundaries-levels-0-1-2>
+
+
+# Shape File Yukleme
+
+```{r echo= TRUE}
+turkey <- st_read("C:/Users/firat/Desktop/turkey_administrativelevels0_1_2/adm1a/tur_polbnda_adm1a.shp")
+str(turkey)
+```
+
+
+
+```{r}
+plot(turkey)
+```
+```{r}
+plot(st_geometry(turkey))
+```
+
+# Harita Projeksiyonu
+
+```{r echo= TRUE}
+st_crs(turkey)
+```
+
+- WSG 84 ==> World Geodetic System, WGS 1984, Amerika Ulusal Geospatial Intelligence Agency tarafindan olusturulmustur
+- EPSG:4326 olarak da bilinir!
+- Cartography, geodesy ve GPS'i de iceren uydu navigasyon (satellite navigation) icin bir standart olcu birimidir
+
+Burada son satırda gördüğümüz "ID["EPSG",4326]]" bilgisi haritamızın projekte edilmiş olduğunu gösteriyor. Peki "st_crs" kodunu çalıştırdıktan sonra şöyle bir ifade ile karşılaşmış olsaydık ne yapacaktık?
+
+```{r}
+#proj4string: "+proj=longlat +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +no_defs
+```
+
+Bu ifade bize haritamızın projekte edilmediğini gösterecekti çünkü "proj4string" ifadesini "+proj=longlat" takip ediyor. Eğer karşılaştığımız sonuç bu şekilde olsaydı, o zaman haritamızı projekte etmemiz gerekecekti. Peki hangi projeksiyon bilgisini kullanmamız lazım? Bu sorunun cevabi derin felsefi tartışmalar gerektirir ki bizim amacımız sadece haritamızı doğru bir şekilde görselleştirmek. Bunun için ülkelerin EPSG kodlarını bulmamız isimizi görecektir. Bunu yapabilmek için de ülkelerin UTM paftalarını bilmemiz gerekiyor. 
+
+Kısa bir Google araştırmasından sonra Türkiye’nin 4 farklı UTM paftasına sahip olduğunu görüyoruz.
+
+
+## Turkiye'nin UTM Paftasi
+
+![](C:/Users/firat/Downloads/pafta_bolumlemesi.png)
+
+Bu pafta bölümlemelerinden 36 nolu bölümleme başkent Ankara’yı kapsadığı için, haritamızı 36 numaralı UTM zomuna tekabül eden EPSG kodu ile projekte edebiliriz. 36 numaralı UTM paftasının EPSG kodunu [internetten](https://epsg.io/32636) rahatlıkla buluruz! Buna göre 36 nolu UTM paftasının EPSG kodu 32636'dir. Hadi gelin bu bilgiyi shape file'imiz için güncelleyelim.
+
+```{r}
+turkey_utm <- st_transform(turkey, 32636)
+st_crs(turkey_utm)
+```
+
+Görüldüğü gibi en alt satırdaki ID bilgisi ID["EPSG",32636]] olacak şekilde güncellenmiş oldu. Artık haritamız doğru bir şekilde görselleştirilmeye hazır. 
+
+(Bir bilgi: Aşağıdaki adresten kolayca Türkiye haritasının projeksiyonu için gerekli EPSG kodunu/kodlarını bulabiliriz.
+
+
+<https://spatialreference.org/>)
+
+```{r}
+plot(turkey_utm)
+```
+
+# Eger Turkiye haritasini yanlis projekte ederseniz ne olur?
+
+
+```{r}
+turkey_wrongproj <- st_transform(turkey, 3338)
+plot(turkey_wrongproj)
+```
+
