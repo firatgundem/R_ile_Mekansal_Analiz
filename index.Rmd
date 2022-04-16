@@ -52,11 +52,14 @@ library(tmap)
 -Uygulamada basitçe bir ülkedeki şehirlerin her birinin birer poligon olarak ifade edilebilir.
 
 ```{r}
+# Mekansal Analiz Icin sart olan dosya formatlari
+
 # turkey.shp ==> Shape File
 # turkey.shx ==> Autodesk AutoCAD tarafindan derlenen, sekil ve font tanimlamalarini iceren dosya
 # turkey.dbf ==> data base file
 
-# prj, 
+# Mekansal Analiz icin gerekli ancak sart olmayan dosya formatlari
+#.prj, 
 #.gda, 
 #.sbx, vb.
 
@@ -72,7 +75,7 @@ library(tmap)
 
 ```{r echo= TRUE}
 turkey <- st_read("C:/Users/firat/Desktop/turkey_administrativelevels0_1_2/adm1a/tur_polbnda_adm1a.shp")
-str(turkey)
+turkey
 ```
 
 
@@ -90,8 +93,8 @@ plot(st_geometry(turkey))
 st_crs(turkey)
 ```
 
-- WSG 84 ==> World Geodetic System, WGS 1984, Amerika Ulusal Geospatial Intelligence Agency tarafindan olusturulmustur
-- EPSG:4326 olarak da bilinir!
+- WSG 84 ==> World Geodetic System, WGS 1984, Amerikan Ulusal Geospatial Intelligence Agency tarafindan olusturulmustur
+- EPSG:4326 olarak da bilinir! (European Petroleum Survey Group)
 - Cartography, geodesy ve GPS'i de iceren uydu navigasyon (satellite navigation) icin bir standart olcu birimidir
 
 Burada son satırda gördüğümüz "ID["EPSG",4326]]" bilgisi haritamızın projekte edilmiş olduğunu gösteriyor. Peki "st_crs" kodunu çalıştırdıktan sonra şöyle bir ifade ile karşılaşmış olsaydık ne yapacaktık?
@@ -108,6 +111,9 @@ Kısa bir Google araştırmasından sonra Türkiye’nin 4 farklı UTM paftasın
 ## Turkiye'nin UTM Paftasi
 
 ![](C:/Users/firat/Downloads/pafta_bolumlemesi.png)
+```{r}
+
+```
 
 Bu pafta bölümlemelerinden 36 nolu bölümleme başkent Ankara’yı kapsadığı için, haritamızı 36 numaralı UTM zomuna tekabül eden EPSG kodu ile projekte edebiliriz. 36 numaralı UTM paftasının EPSG kodunu [internetten](https://epsg.io/32636) rahatlıkla buluruz! Buna göre 36 nolu UTM paftasının EPSG kodu 32636'dir. Hadi gelin bu bilgiyi shape file'imiz için güncelleyelim.
 
@@ -134,4 +140,546 @@ plot(turkey_utm)
 turkey_wrongproj <- st_transform(turkey, 3338)
 plot(turkey_wrongproj)
 ```
+
+# Mekansal Veri Birlestirme (Spatial Data Merging)
+
+
+```{r echo= TRUE}
+turkey <- st_read("C:/Users/firat/Desktop/turkey_administrativelevels0_1_2/tur_polbnda_adm1.shp")
+turkey
+```
+
+## Bir ID Sutunu Olusturmak: Plaka
+
+```{r}
+#install.packages("stringr")
+library(stringr)
+```
+
+### ADM1 kolonunu sadelestirelim
+
+```{r}
+turkey$ADM1 = str_sub(turkey$ADM1,-2)
+turkey
+```
+
+
+### ADM1 kolonundaki ilk 9 il icin bastaki sifirlari silelim
+
+```{r}
+turkey$ADM1[turkey$ADM1=="01"]<-"1"
+turkey$ADM1[turkey$ADM1=="02"]<-"2"
+turkey$ADM1[turkey$ADM1=="03"]<-"3"
+turkey$ADM1[turkey$ADM1=="04"]<-"4"
+turkey$ADM1[turkey$ADM1=="05"]<-"5"
+turkey$ADM1[turkey$ADM1=="06"]<-"6"
+turkey$ADM1[turkey$ADM1=="07"]<-"7"
+turkey$ADM1[turkey$ADM1=="08"]<-"8"
+turkey$ADM1[turkey$ADM1=="09"]<-"9"
+
+turkey
+```
+
+### ADM1 kolonunun adini Plaka olarak degistirelim ve ID sutunumuzu olusturalim
+
+```{r}
+turkey <- turkey %>%
+  rename(Plaka = ADM1)
+turkey
+```
+
+### Plaka kolonunu numeric yapalim
+
+```{r}
+turkey$Plaka <- as.numeric(as.character(turkey$Plaka))
+```
+
+
+
+### TUIK'ten alinan verileri shape file ile nasil birlestirebilirim?
+
+
+```{r echo=FALSE}
+nuts3 <- read.csv("C:/Users/firat/Desktop/Plaka_NUTS3_Cetveli.csv", header = TRUE)
+nuts3
+```
+
+### Plaka kolonunu numeric yapalim
+
+```{r}
+nuts3$Plaka <- as.numeric(as.integer(nuts3$Plaka))
+```
+
+### Nuts3 kodlarini shape file ile merge edelim
+
+
+```{r echo=TRUE}
+turkey <- left_join(turkey, nuts3 , by = "Plaka") 
+turkey
+```
+
+
+
+```{r echo=FALSE}
+tuik <- read.csv("C:/Users/firat/Desktop/Why_R_Turkey/R_ile_Mekansal_Analiz/df.csv", header = TRUE, check.names = TRUE )
+tuik
+```
+
+
+```{r echo=FALSE}
+turkey <- merge(turkey, tuik, by="NUTS3")
+turkey
+```
+
+### Gereksiz kolonlardan kurtulalim
+
+```{r echo= FALSE}
+turkey <- select(turkey, -c(6,7))
+turkey
+```
+
+### Son olarak da NUTS3.x ve City.x adlarini duzenleyelim
+
+```{r echo=FALSE}
+turkey <- turkey %>%
+  rename(Plaka = Plaka.x) %>% 
+  rename(City = City.x)
+turkey
+```
+
+## 5. Veri Gorsellestirme
+
+```{r echo=TRUE}
+ggplot(turkey) +
+  geom_sf(col = "blue")
+```
+
+## Statik Mekansal Veri Gorsellestirme
+
+### ggplot
+
+Aşağıdaki kodlar ggplot kütüphanesi ile oluşturulan çeşitli görselleştirmeleri içermektedir.
+
+```{r echo= TRUE}
+ggplot(data = turkey) +
+  geom_sf(aes(fill = gdp_pc20))+
+  labs(
+    fill = "",
+    title = paste0(
+      "GDP per capita ($) ",
+      "2020")) 
+```
+
+
+```{r echo= TRUE}
+ggplot(data = turkey) +
+  geom_sf(aes(fill = gdp_pc20))+
+  labs(
+    fill = "",
+    title = paste0(
+      "GDP per capita ($) ",
+      "2020")) +
+  scale_fill_continuous(trans = 'reverse')
+```
+
+### tmap
+
+```{r}
+library(tmap)
+```
+
+
+#### Basit gorsellestirme
+
+```{r}
+tm_shape(turkey) +
+  tm_polygons("gdp_pc20")
+```
+
+### tm_fill'de style argumani
+
+tmap librarysi verileri manipule etmeden "style" argumanini degistirerek direkt olarak farkli turlerde harita olusturmaya izin vermektedir. Bu turler
+    + Quantile map ==> style="quantile"
+    + Natural Breaks map ==> style="jenks"
+    + Equal Intervals map ==>style="equal"
+    + Custom Breaks map ==> breaks=c(0,20,30,40,45,50,60)
+    + Percentile map
+    + Box map
+    + Standard Deviation Map ==> style="sd"
+    + Categoric Map ==> style="cat"
+
+
+
+#### Gruplandirma sayisini 4'e indirelim, n = 4
+
+
+```{r}
+tm_shape(turkey) +
+  tm_polygons() +
+  tm_shape(turkey)+
+  tm_borders()+
+  tm_fill("gdp_pc20", n = 4, style = "quantile")
+```
+
+#### Legend'i disari alalim
+
+
+```{r}
+tm_shape(turkey) +
+  tm_polygons() +
+  tm_shape(turkey)+
+  tm_borders(col = "black", lwd = 2, lty = "solid", alpha = 0.5) +
+  tm_fill("gdp_pc20", n = 4, style = "quantile")+
+  tm_layout(legend.outside = TRUE)
+  
+```
+
+#### Rengi degistirelim (palette = "BuPu") ve gruplari 4 esit parcaya gore siniflandiralim, style = ("equal")
+
+```{r}
+tm_shape(turkey) + 
+    tm_borders(col = "black", lwd = 2, lty = "solid", alpha = 0.5) +   
+  tm_shape(turkey)+
+  tm_borders(col = "black", lwd = 2, lty = "solid", alpha = 0.5) +
+  tm_fill("gdp_pc20", n = 4, palette = "BuPu", style = "equal")+
+  tm_layout(legend.outside = TRUE)
+```
+
+#### Bubble map yapalim
+
+```{r}
+tm_shape(turkey) + 
+  tm_bubbles("gdp_pc20", n = 4, palette = "Blues", style = "equal")+
+  tm_layout(legend.outside = TRUE)
+```
+
+#### Bubbler poligon icinde olsun
+
+```{r}
+tm_shape(turkey) + 
+    tm_borders(col = "black", lwd = 2, lty = "solid", alpha = 0.5) +   
+  tm_shape(turkey)+
+  tm_borders(col = "black", lwd = 2, lty = "solid", alpha = 0.5) +
+  tm_bubbles("gdp_pc20", n = 4, palette = "Blues", style = "equal")+
+  tm_layout(legend.outside = TRUE)
+```
+
+#### 2 Degiskeni ayni anda normal ve bubble olarak haritalayalim
+
+
+```{r}
+tm_shape(turkey) + 
+    tm_borders(col = "black", lwd = 2, lty = "solid", alpha = 0.5) +   
+  tm_shape(turkey)+
+  tm_borders(col = "black", lwd = 2, lty = "solid", alpha = 0.5) +
+  tm_fill("gdp_pc20", n = 4, palette = "BuPu", style = "equal")+
+  tm_bubbles("lnM_20", n=4)+
+  tm_layout(legend.outside = TRUE)
+```
+
+
+
+#### Tek bir kolonda alt alta haritalayalim
+
+
+
+```{r}
+m1 <- tm_shape(turkey) + 
+    tm_borders(col = "black", lwd = 2, lty = "solid", alpha = 0.5) +   
+  tm_shape(turkey)+
+  tm_borders(col = "black", lwd = 2, lty = "solid", alpha = 0.5) +
+  tm_fill("gdp_pc20", n = 4, palette = "BuPu", style = "equal", 
+          title = " GDP per capita, 2020 ")+
+  tm_layout(legend.outside = TRUE)
+
+m2 <- tm_shape(turkey) + 
+    tm_borders(col = "black", lwd = 2, lty = "solid", alpha = 0.5) +   
+  tm_shape(turkey)+
+  tm_borders(col = "black", lwd = 2, lty = "solid", alpha = 0.5) +
+  tm_fill("lnM_20", n = 4, palette = viridisLite :: viridis (20), style = "quantile",
+          title = " Import, 2020 ")+
+  tm_layout(legend.outside = TRUE)
+
+tmap_arrange(m1, m2, ncol = 1)
+```
+
+
+### Interactive Haritalama 
+
+```{r}
+tmap_mode("view")
+m1
+```
+
+
+### 3-D Mapping
+
+```{r}
+#install.packages("rayshader")
+library(rayshader) 
+```
+
+
+
+
+```{r eval = FALSE}
+def_20 <- ggplot(data = turkey) +
+  geom_sf(aes(fill = Def_20)) +
+  scale_fill_viridis_c(option = "plasma", trans = "sqrt")+ 
+  ggtitle("2020 Deflator at the Province Level")
+
+plot(def_20)
+
+plot_gg(def_20,multicore=TRUE,width=6,height=6, scale=310, zoom = .25, offset_edges=TRUE, windowsize = c(900, 900))# Plot_gg de rayshader
+
+render_snapshot(filename = "3D_deflator.png", clear = FALSE)
+
+#parameters for 360 positions
+phivechalf = 30 + 60 * 1/(1 + exp(seq(-7, 20, length.out = 180)/2))
+phivecfull = c(rep("88.2", 30), phivechalf, rev(phivechalf))
+thetavec = c(rep("0", 30), 0 + 60 * sin(seq(0,359,length.out = 360) * pi/180))
+zoomvec = 0.25 + 0.4 * 1/(1 + exp(seq(-5, 20, length.out = 180)))
+zoomvecfull = c(rep("0.65", 30),zoomvec, rev(zoomvec))
+
+rayshader::render_movie(filename="def_20",
+                        type='custom',
+                        frames = 390,
+                        fps=30,
+                        phi = phivecfull, 
+                        zoom = zoomvecfull, 
+                        theta = thetavec
+) 
+```
+
+
+
+```{r warning=FALSE}
+library(plotly)
+```
+
+```{r}
+fig <- plot_geo(turkey)
+fig                
+```
+
+```{r}
+plot_ly(turkey, split = ~City, color = ~gdp_pc20,
+        alpha = 1,
+  showlegend = FALSE)
+```
+
+
+
+
+
+## Mekansal Istatistik
+
+### Komsuluk Matrisi (contiguity matrix)
+
+```{r warning=FALSE}
+library(rgeoda)
+library(spdep)
+library(splm)
+library(stargazer)
+library(sp)
+library(purrr)
+```
+ 
+
+![](C:/Users/firat/Desktop/Why_R_Turkey/R_ile_Mekansal_Analiz/mekansal4.png)
+
+
+
+```{r}
+turkey_q <- poly2nb(turkey, queen = TRUE)
+listw <- nb2listw(turkey_q) 
+summary(listw)
+
+```
+
+
+```{r}
+str(turkey_q)
+```
+
+
+geometry kolonu enlem(latitude) ve boylam (longitude) bilgisini icermekteydi. O zaman buradan illerin enlem ve boylamlarini turetelim.
+
+```{r}
+longitude <- map_dbl(turkey$geometry, ~st_centroid(.x)[[1]])
+latitude <- map_dbl(turkey$geometry, ~st_centroid(.x)[[2]])
+coords <- cbind(longitude, latitude)
+head(coords)
+```
+
+Ve agirlik matrisini gorsellestirelim
+
+
+```{r}
+plot(turkey_q, coords, lwd=.2, col="red", cex = .6)
+```
+
+
+### Moran's I ve LISA (Local Indicators of Spatial Association)
+
+
+![](C:/Users/firat/Desktop/Why_R_Turkey/R_ile_Mekansal_Analiz/mekansal1.png)
+
+
+![](C:/Users/firat/Desktop/Why_R_Turkey/R_ile_Mekansal_Analiz/mekansal2.png)
+
+![](C:/Users/firat/Desktop/Why_R_Turkey/R_ile_Mekansal_Analiz/mekansal3.png)
+
+![](C:/Users/firat/Desktop/Why_R_Turkey/R_ile_Mekansal_Analiz/mekansal5.png)
+
+```{r}
+globalMoran <- moran.test(turkey$gdp_pc20, listw)
+globalMoran
+```
+
+
+```{r}
+moran <- moran.plot(turkey$gdp_pc20, listw)
+```
+
+
+
+```{r}
+queen_w <- queen_weights(turkey)
+summary(queen_w)
+```
+
+### Komsulara ulasmak icin
+
+```{r}
+nbrs <- get_neighbors(queen_w, idx = 9)
+cat("\nNeighbors of the 1-st observation are:", nbrs)
+```
+
+
+### LISA Map
+
+![](C:/Users/firat/Desktop/Why_R_Turkey/R_ile_Mekansal_Analiz/mekansal6.png)
+
+![](C:/Users/firat/Desktop/Why_R_Turkey/R_ile_Mekansal_Analiz/mekansal7.png)
+
+
+local_moran fonksiyonu bir lisa objesi yaratacak, daha sonra da haritayi olustururken bu obje kollanilacak!
+
+```{r}
+gdp_pc20 = turkey["gdp_pc20"]
+lisa <- local_moran(queen_w, gdp_pc20)
+```
+
+
+
+lisa_values function 81 il icin gdp_pc20'nin local Moran's I degerlerini verir.
+
+
+
+```{r}
+lms <- lisa_values(gda_lisa = lisa)
+lms
+```
+
+Ayrica pseudo-p degerleri de elde ederiz
+
+```{r}
+pvals <- lisa_pvalues(lisa)
+pvals
+```
+
+
+Anlamli olanlardan bir kume yaratmak icin 0.05 anlamliligi secebiliriz
+
+```{r}
+cats <- lisa_clusters(lisa, cutoff = 0.05)
+cats
+```
+
+Bu rakamlar su anlamlara gelmektedir:
+
+```{r}
+# 0 Not significant
+# 1 High-High
+# 2 Low-Low
+# 3 High-Low
+# 4 Low-High
+# 5 Undefined
+# 6 Isolated
+```
+
+Bunlara etiket olarak lisa_labes fonksiyonu ile de ulasabiliriz
+
+```{r}
+lbls <- lisa_labels(lisa)
+lbls
+```
+
+
+LISA MAP
+
+```{r}
+lisa_colors <- lisa_colors(lisa)
+lisa_labels <- lisa_labels(lisa)
+lisa_clusters <- lisa_clusters(lisa)
+
+plot(st_geometry(turkey), 
+     col=sapply(lisa_clusters, function(x){return(lisa_colors[[x+1]])}), 
+     border = "#333333", lwd=0.2)
+title(main = "LISA Map of GDP per capita, 2020")
+legend('top', legend = lisa_labels, fill = lisa_colors, border = "#eeeeee")
+```
+
+### Mekansal Ekonometrik Modeller
+
+![](C:/Users/firat/Desktop/Why_R_Turkey/R_ile_Mekansal_Analiz/mekansal8.png)
+
+\begin{align*}
+$y = \rho Wy + X\beta+u$    ==> SAR, Spatial Autoregressive Model
+$Wy$ ==> Spatial Lag
+$\rho$ ==> Spatial Autoregressive Coefficiant
+
+$y = X\beta+u$ 
+$u = \lambda Wu + e$  ==> SEM, Spatial Error Model
+\end{align*}
+
+
+```{r}
+reg1 <- lm(AKP_18~ Mosq + CHP_18, data = turkey)
+summary(reg1)
+```
+
+```{r}
+lmMoranTest <- lm.morantest(reg1,listw)
+lmMoranTest
+```
+
+```{r}
+lmLMtests <- lm.LMtests(reg1, listw, test=c("LMerr", "LMlag", "RLMerr", "RLMlag", "SARMA"))
+lmLMtests
+```
+
+
+```{r warning= FALSE}
+reg2 <- errorsarlm(AKP_18~ Mosq + CHP_18, data=turkey, listw)
+summary(reg2)
+```
+
+## Regression Output
+
+![](C:/Users/firat/Desktop/Why_R_Turkey/R_ile_Mekansal_Analiz/mekansal9.png)
+
+
+
+
+
+
+
+
+
+
+
+
+
 
